@@ -123,8 +123,10 @@
 #define RECV_BUFSIZE_DEFAULT 2000000000
 /*----- Default Value for LWIP_SNTP: 0 ---*/
 #define LWIP_SNTP 1
-/*----- Value in opt.h for LWIP_STATS: 1 -----*/
-#define LWIP_STATS 0
+/*----- Default Value for LWIP_STATS: 0 ---*/
+#define LWIP_STATS 1
+/*----- Value in opt.h for MIB2_STATS: 0 or SNMP_LWIP_MIB2 -----*/
+#define MIB2_STATS 0
 /*----- Value in opt.h for CHECKSUM_GEN_IP: 1 -----*/
 #define CHECKSUM_GEN_IP 0
 /*----- Value in opt.h for CHECKSUM_GEN_UDP: 1 -----*/
@@ -147,9 +149,27 @@
 #define CHECKSUM_CHECK_ICMP6 0
 /*----- Default Value for LWIP_DBG_TYPES_ON: LWIP_DBG_ON ---*/
 #define LWIP_DBG_TYPES_ON LWIP_DBG_OFF
+/*----- Default Value for API_MSG_DEBUG: LWIP_DBG_OFF ---*/
+#define API_MSG_DEBUG LWIP_DBG_ON
+/*----- Default Value for SOCKETS_DEBUG: LWIP_DBG_OFF ---*/
+#define SOCKETS_DEBUG LWIP_DBG_ON
+/*----- Default Value for ICMP_DEBUG: LWIP_DBG_OFF ---*/
+#define ICMP_DEBUG LWIP_DBG_ON
+/*----- Default Value for IGMP_DEBUG: LWIP_DBG_OFF ---*/
+#define IGMP_DEBUG LWIP_DBG_ON
+/*----- Default Value for INET_DEBUG: LWIP_DBG_OFF ---*/
+#define INET_DEBUG LWIP_DBG_ON
+/*----- Default Value for IP_DEBUG: LWIP_DBG_OFF ---*/
+#define IP_DEBUG LWIP_DBG_ON
+/*----- Default Value for DHCP_DEBUG: LWIP_DBG_OFF ---*/
+#define DHCP_DEBUG LWIP_DBG_ON
+/*----- Default Value for AUTOIP_DEBUG: LWIP_DBG_OFF ---*/
+#define AUTOIP_DEBUG LWIP_DBG_ON
+/*----- Default Value for DNS_DEBUG: LWIP_DBG_OFF ---*/
+#define DNS_DEBUG LWIP_DBG_ON
 /*-----------------------------------------------------------------------------*/
 /* USER CODE BEGIN 1 */
-#define LWIP_DEBUG 0
+#define LWIP_DEBUG 1
 #define SNTP_SERVER_DNS 1
 /* USER CODE END 1 */
 

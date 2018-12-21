@@ -24,6 +24,7 @@
 
 #define OVERSAMPLING_16 0x5
 #define OVERSAMPLING_4  0x3
+#define OVERSAMPLING_1  0x1
 
 void collect_sensor_data();
 void set_i2c_handler (I2C_HandleTypeDef *i2c_handle);

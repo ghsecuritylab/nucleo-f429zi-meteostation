@@ -46,12 +46,12 @@ HAL_StatusTypeDef configure_mode_and_oversampling() {
   
   get_calibration_data();
   
-  uint8_t temp_sampl = OVERSAMPLING_16;
-  uint8_t pressure_sampl = OVERSAMPLING_16;
+  uint8_t temp_sampl = OVERSAMPLING_1;
+  uint8_t pressure_sampl = OVERSAMPLING_1;
   uint8_t mode = FORCE_MODE;
   ctrl_meas_config = temp_sampl << 5 | pressure_sampl << 2 | mode;
   i2c_buffer[0] = CTRL_HUM_REG;
-  i2c_buffer[1] = OVERSAMPLING_4;
+  i2c_buffer[1] = OVERSAMPLING_1;
   return write_temperature_data(i2c_buffer, 2);
 }
 
@@ -133,6 +133,8 @@ void get_calibration_data () {
   dig_P8 = (data[21] << 8) | data[20];
   dig_P9 = (data[23] << 8) | data[22];
   dig_H1 = data[25];
+  
+  printf("%u %u %u\n", dig_T1, dig_T2, dig_T3);
   
   
   data[0] = CONF_BURST_SECOND;

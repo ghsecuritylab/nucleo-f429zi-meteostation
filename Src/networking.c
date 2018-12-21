@@ -59,20 +59,27 @@ static err_t server_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t e
               uint16_t offset = 0;
               char *buf = import_csv_history(&offset, &len);
               send_data(buf, len, pcb);
-            } else if (strcmp(pc, "immediate") == 0) {
+            } 
+            
+            else if (strcmp(pc, "immediate") == 0) {
               char *buf;
               struct measure_record record;
               perform_calculation(&record);
               buf = stringify_single_record(&record, &len);
+              printf("%f\t%f\t%f\n", record.humidity, record.pressure, record.temperature);
               send_data(buf, len, pcb);
-            } else if (strcmp(pc, "time") == 0) {
+            } 
+            
+            else if (strcmp(pc, "time") == 0) {
               struct tm *ts;
               time_t now = timestamp_conv_local(time(NULL));
               ts = localtime(&now);
               strftime(buffer, MTU_SIZE, "%H:%M:%S %Y-%m-%d\n", ts);
               len = strlen(buffer);
               send_data(buffer, len, pcb);
-            } else if (strcmp(pc, "csv") == 0) {
+            } 
+            
+            else if (strcmp(pc, "csv") == 0) {
               struct measure_record record;
               perform_calculation(&record);
               len = record_to_csv(buffer, &record);
