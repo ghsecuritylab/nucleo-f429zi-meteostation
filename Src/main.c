@@ -118,6 +118,7 @@ int main(void)
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
   HAL_GPIO_TogglePin(GPIOB, LD3_Pin);
+  uint16_t *addr = (uint16_t *)0x81FF000;
   configure_mode_and_oversampling();
   set_time_offset(180);
   HAL_TIM_Base_Start_IT(&htim2);  

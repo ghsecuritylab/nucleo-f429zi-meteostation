@@ -43,8 +43,8 @@ static void send_data (char *data, uint16_t length, struct tcp_pcb *pcb) {
 }
 
 static err_t server_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err) {
-      int len;
-      char *pc;
+      size_t len;
+      char *pc, *parsed, *buf;
 
       if (err == ERR_OK && p != NULL) {
             tcp_recved(pcb, p->tot_len);  
@@ -54,23 +54,22 @@ static err_t server_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t e
               len--;
               pc[len] = 0;
             }
+            parsed = strtok(pc, " ");
             
-            if (strcmp(pc, "history") == 0) {
+            if (strcmp(parsed, "history") == 0) {
               uint16_t offset = 0;
-              char *buf = import_csv_history(&offset, &len);
+              buf = import_csv_history(&offset, &len);
               send_data(buf, len, pcb);
             } 
             
-            else if (strcmp(pc, "immediate") == 0) {
-              char *buf;
+            else if (strcmp(parsed, "immediate") == 0) {
               struct measure_record record;
               perform_calculation(&record);
               buf = stringify_single_record(&record, &len);
-              printf("%f\t%f\t%f\n", record.humidity, record.pressure, record.temperature);
               send_data(buf, len, pcb);
             } 
             
-            else if (strcmp(pc, "time") == 0) {
+            else if (strcmp(parsed, "time") == 0) {
               struct tm *ts;
               time_t now = timestamp_conv_local(time(NULL));
               ts = localtime(&now);
@@ -79,12 +78,23 @@ static err_t server_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t e
               send_data(buffer, len, pcb);
             } 
             
-            else if (strcmp(pc, "csv") == 0) {
+            else if (strcmp(parsed, "csv") == 0) {
               struct measure_record record;
               perform_calculation(&record);
               len = record_to_csv(buffer, &record);
               send_data(buffer, len, pcb);
             }
+            
+            else if (strcmp(parsed, "get_os") == 0) {
+              buf = get_oversampling(&len);
+              send_data(buf, len, pcb);
+            }
+            
+            else if (strcmp(parsed, "set_os") == 0) {
+              buf = set_oversampling(&len);
+              send_data(buf, len, pcb);
+            }
+            
             pbuf_free(p);
             
       } else {
