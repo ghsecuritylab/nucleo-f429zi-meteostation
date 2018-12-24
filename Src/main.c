@@ -91,7 +91,6 @@ int main(void)
 {
   /* USER CODE BEGIN 1 */
   set_i2c_handler(&hi2c1);
-  HAL_StatusTypeDef i2c_status;
   
   /* USER CODE END 1 */
 
@@ -118,7 +117,6 @@ int main(void)
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
   HAL_GPIO_TogglePin(GPIOB, LD3_Pin);
-  uint16_t *addr = (uint16_t *)0x81FF000;
   configure_mode_and_oversampling();
   set_time_offset(180);
   HAL_TIM_Base_Start_IT(&htim2);  
@@ -227,7 +225,7 @@ static void MX_TIM2_Init(void)
   htim2.Instance = TIM2;
   htim2.Init.Prescaler = 41999;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 300000;
+  htim2.Init.Period = 60000;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
   {

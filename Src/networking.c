@@ -57,8 +57,7 @@ static err_t server_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t e
             parsed = strtok(pc, " ");
             
             if (strcmp(parsed, "history") == 0) {
-              uint16_t offset = 0;
-              buf = import_csv_history(&offset, &len);
+              buf = import_csv_history(&len);
               send_data(buf, len, pcb);
             } 
             
@@ -92,6 +91,11 @@ static err_t server_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t e
             
             else if (strcmp(parsed, "set_os") == 0) {
               buf = set_oversampling(&len);
+              send_data(buf, len, pcb);
+            }
+            
+            else if (strcmp(parsed, "get_mappings") == 0) {
+              buf = get_mappings(&len);
               send_data(buf, len, pcb);
             }
             

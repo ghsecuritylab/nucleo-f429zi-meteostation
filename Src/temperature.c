@@ -1,18 +1,16 @@
 #include "temperature.h"
 #include "local_time.h"
-#include "memory.h"
 #include "string.h"
-#include <stdlib.h>
+#include "stdlib.h"
+#include "stdint.h"
 
 I2C_HandleTypeDef *sensor_i2c_handle;
 uint8_t *i2c_buffer;
 char *string_buffer;
-size_t buffer_length;
 
 struct measure_config *config, *flash_config;
-
-uint16_t measure_record_length;
-struct measure_record *rec_border, *first, *next;
+struct mem_history_mapping *mapping, *flash_mapping;
+struct measure_record *mapping_begin, *record;
 char flag = 0;
 
 // Sensor calibration variables
@@ -73,9 +71,11 @@ void temp_set_flag() {
 void configure_mode_and_oversampling() {
   i2c_buffer = (uint8_t*)allocate_sram_memory(BUFFER_MAX_SIZE);
   config = (struct measure_config*)allocate_sram_memory(sizeof(struct measure_config));
+  mapping = (struct mem_history_mapping*)allocate_sram_memory(sizeof(struct mem_history_mapping));
+  record = (struct measure_record*)allocate_sram_memory(sizeof(struct measure_record));
+  
   flash_config = (struct measure_config *)(
-    (FLASH_END_ADDR + 1) -
-    (CONFIG_OFFSET * FLASH_PAGE_SIZE)
+    (HISTORY_MEM_BEGIN) - (CONFIG_OFFSET - DATA_OFFSET) * FLASH_PAGE_SIZE
   );
   uint8_t ft = flash_config->temperature_os;
   uint8_t fp = flash_config->pressure_os;
@@ -85,14 +85,26 @@ void configure_mode_and_oversampling() {
   config->pressure_os = fp > 0 && fp <= 16 ? fp : OVERSAMPLING_1;
   config->humidity_os = fh > 0 && fh <= 16 ? fh : OVERSAMPLING_1;
   config->iir_samples = fi > 0 && fi <= 16 ? fi : OVERSAMPLING_1;
+  
+  mapping_begin = (struct measure_record *)(HISTORY_MEM_BEGIN);
+  
+  flash_mapping = (struct mem_history_mapping *)(
+    (HISTORY_MEM_BEGIN) - (MAPPING_OFFSET - DATA_OFFSET) * FLASH_PAGE_SIZE
+  );
+  uint32_t ff = (uint32_t)flash_mapping->first;
+  uint32_t fn = (uint32_t)flash_mapping->next;
+  
+  if (ff >= 0x8100000 && ff < 0x8200000 && fn >= 0x8100000 && fn < 0x8200000) {
+    mapping->first = (struct measure_record *)ff;
+    mapping->next = (struct measure_record *)fn;
+  } else {
+    mapping->next = mapping_begin;
+    mapping->first = mapping->next - 1;
+  }
+  
+  get_calibration_data(); 
 
-  get_calibration_data();
-
-  measure_record_length = RECORDS_COUNT;
-  rec_border = (struct measure_record *)allocate_sram_memory(sizeof(struct measure_record) * measure_record_length);
-  first = next = rec_border;
-  buffer_length = RECORDS_COUNT / 7 * RECORD_STRING_SIZE;
-  string_buffer = (char *)allocate_sram_memory(buffer_length);
+  string_buffer = (char *)allocate_sram_memory(FLASH_PAGE_SIZE);
 }
 
 char *get_oversampling(size_t *length) {
@@ -105,72 +117,92 @@ char *get_oversampling(size_t *length) {
 }
 
 char *set_oversampling (size_t *length) {
-  *length = 0;
-  char *part = strtok(0, " ");
   uint8_t *dest, value;
+  char *part = strtok(0, " ");
+  *length = 0;
+  
   if (part == 0) {
     *length = sprintf(string_buffer, "Too few arguments\n");
     return string_buffer;
   }
   
-  switch (*part) {
-    case 't':
-      dest = &(config->temperature_os);
-      break;
-    case 'p':
-      dest = &(config->pressure_os);
-      break;
-    case 'h':
-      dest = &(config->humidity_os);
-      break;
-    case 'i':
-      dest = &(config->iir_samples);
-      break;
-    default:
-      *length = sprintf(string_buffer, "Argument should be one of those: 't,p,h,i'\n");
-      return string_buffer;
-  }
-  part = strtok(0, " ");
-  value = atoi(part);
-
-  if (value <= 0 || value > 16) {
-    *length = sprintf(string_buffer, "Value is abscent or incorrect\n");
-    return string_buffer;
-  } else {
-    switch (value) {
-      case OVERSAMPLING_1:
-      case OVERSAMPLING_2:
-      case OVERSAMPLING_4:
-      case OVERSAMPLING_8:
-      case OVERSAMPLING_16:
-        *dest = value;
-        flash_write_32((uint32_t *)config, CONFIG_OFFSET, 0, 1, 1);
-        *length = sprintf(string_buffer, "Value is written successully\n");
+  do {
+    switch (*part) {
+      case 't':
+        dest = &(config->temperature_os);
+        break;
+      case 'p':
+        dest = &(config->pressure_os);
+        break;
+      case 'h':
+        dest = &(config->humidity_os);
+        break;
+      case 'i':
+        dest = &(config->iir_samples);
         break;
       default:
-        *length = sprintf(string_buffer, "Value should be power of 2\n");
-        break;
+        *length = sprintf(string_buffer, "Argument should be one of those: 't,p,h,i'\n");
+        return string_buffer;
     }
-  }
+    part = strtok(0, " ");
+    value = atoi(part);
+
+    if (value <= 0 || value > 16) {
+      *length = sprintf(string_buffer, "Value is abscent or incorrect\n");
+      return string_buffer;
+    } else {
+      switch (value) {
+        case OVERSAMPLING_1:
+        case OVERSAMPLING_2:
+        case OVERSAMPLING_4:
+        case OVERSAMPLING_8:
+        case OVERSAMPLING_16:
+          *dest = value;
+          break;
+        default:
+          *length = sprintf(string_buffer, "Value should be power of 2\n");
+          break;
+      }
+    }
+  } while ((part = strtok(0, " ")) != 0);
+
+  flash_write_32((uint32_t *)config, CONFIG_OFFSET, 0, 1, 1);
+  *length = sprintf(string_buffer, "Value is written successully\n");
+          
   return string_buffer;
 }
 
-char *import_csv_history (uint16_t *offset, size_t *length) {
+char *get_mappings(size_t *length) {
+  *length = sprintf(
+    string_buffer, "First:\t0x%x\nNext:\t0x%x\n", mapping->first, mapping->next
+  );
+  return string_buffer;
+}
+
+
+char *import_csv_history (size_t *length) {
   *length = 0;
-  struct measure_record *pointer;
-  while (*length < buffer_length) {
-    pointer = first;
-    if (*offset > 0) {
-      if (pointer + *offset >  rec_border + measure_record_length) {
-        *offset = (pointer + *offset) - (rec_border + measure_record_length);
-        pointer = rec_border + *offset;
-      } else {
-        pointer += *offset;
-      }
-    }
-    if (pointer == next) break;
+  uint16_t offset = 0;
+  char *part = strtok(0, " ");
+  if (part != 0) {
+    offset = atoi(part);
+  }
+  
+  struct measure_record *boundary;
+  struct measure_record *pointer = mapping->first + (offset * PAGE_RECORDS_NUMBER);
+  
+  if (mapping->first < mapping_begin) {
+    *length = sprintf(string_buffer, "No data collected yet\n");
+    return string_buffer;
+  }
+  
+  if ((uint32_t)pointer > FLASH_END_ADDR) {
+    pointer = (struct measure_record*)(HISTORY_MEM_BEGIN + (uint32_t)pointer % (FLASH_END_ADDR + 1));
+  }
+  boundary = (struct measure_record *)get_sector_addr(pointer) + PAGE_RECORDS_NUMBER;
+  while (pointer < boundary && pointer != mapping->next) {
     *length += record_to_csv(string_buffer + *length, pointer);
-    *offset += 1;
+    pointer++;
   }
   return string_buffer;
 }
@@ -180,7 +212,7 @@ size_t record_to_csv (char *buffer, struct measure_record *record) {
   size_t length;
   time_t timestamp = timestamp_conv_local(record->timestamp);
   ts = localtime(&timestamp);
-  length = strftime(buffer, buffer_length, "\"%H:%M:%S %Y-%m-%d\",", ts);
+  length = strftime(buffer, FLASH_PAGE_SIZE, "\"%H:%M:%S %Y-%m-%d\",", ts);
   length += sprintf(buffer + length, "%1.2f,%f,%f\n",
           record->temperature, record->pressure, record->humidity);
   return length;
@@ -190,7 +222,7 @@ char *stringify_single_record(struct measure_record *record, size_t *length) {
   struct tm *ts;
   time_t timestamp = timestamp_conv_local(record->timestamp);
   ts = localtime(&timestamp);
-  *length = strftime(string_buffer, buffer_length, "Time:\t\t%H:%M:%S %Y-%m-%d\n", ts);
+  *length = strftime(string_buffer, FLASH_PAGE_SIZE, "Time:\t\t%H:%M:%S %Y-%m-%d\n", ts);
   *length += sprintf(string_buffer + *length, "Temperature:\t%1.2f\nPressure:\t%f\nHumidity:\t%f\n",
           record->temperature, record->pressure, record->humidity);
   return string_buffer;
@@ -198,15 +230,33 @@ char *stringify_single_record(struct measure_record *record, size_t *length) {
 
 void update_records() {
   if (flag) {
-    perform_calculation(next);
-    if (next >= rec_border + measure_record_length -1) {
-      next = rec_border;
-    } else {
-      next++;
+    
+    printf("Records are updating\n");
+    char erase_flag = 0;
+    
+    if (mapping->first < mapping_begin) mapping->first = mapping_begin;
+    
+    if (mapping->next == mapping->first) {
+      erase_flag = 1;
+      mapping->first += FLASH_PAGE_SIZE;
+      if ((uint32_t)mapping->first > FLASH_END_ADDR) mapping->first = mapping_begin;
     }
-    if (next == first) {
-      first++;
-    }
+    
+    perform_calculation(record);
+    
+    void *sec_addr = get_sector_addr(mapping->next);
+
+    uint16_t offset = (uint32_t)mapping->next - (uint32_t)sec_addr;
+    uint16_t sec_offset = (FLASH_END_ADDR + 1 - (uint32_t)sec_addr) / FLASH_PAGE_SIZE;
+    flash_write_32((uint32_t *)record, sec_offset, offset, RECORD_WORDS_COUNT, erase_flag);
+    
+    mapping->next++;
+    if ((uint32_t)mapping->next > FLASH_END_ADDR) mapping->next = mapping_begin;
+    
+    flash_write_32((uint32_t *)mapping, MAPPING_OFFSET, 0, MAPPING_WORDS_COUNT, 1);
+    
+    printf("Records update finished\n");
+    
     flag = 0;
   }
 }
@@ -222,7 +272,6 @@ HAL_StatusTypeDef set_measure_calcs () {
   
   uint8_t ctrl_meas_config = osampl_to_value(config->temperature_os) << 5 |
     osampl_to_value(config->pressure_os) << 2 | FORCE_MODE;
-  printf("0x%x\n", ctrl_meas_config);
   
   i2c_buffer[0] = CTRL_MEAS_REG;
   i2c_buffer[1] = ctrl_meas_config;

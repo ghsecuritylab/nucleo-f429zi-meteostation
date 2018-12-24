@@ -4,6 +4,7 @@
 #include "stm32f4xx_hal.h"
 #include "stdint.h"
 #include "time.h"
+#include "memory.h"
 
 #define I2C_TIMEOUT 1000
 #define BME280_ADDR 0x76
@@ -36,9 +37,9 @@
 #define SAMPLES_8       11
 #define SAMPLES_16      22
 
-#define CONFIG_OFFSET 34
-#define POINTERS_OFFSET 33
-#define DATA_OFFSET 32
+#define CONFIG_OFFSET 4
+#define MAPPING_OFFSET 3
+#define DATA_OFFSET 2
 
 void collect_sensor_data();
 void set_i2c_handler (I2C_HandleTypeDef *i2c_handle);
@@ -56,6 +57,15 @@ struct measure_record {
   float humidity;
 };
 
+struct mem_history_mapping {
+  struct measure_record *first;
+  struct measure_record *next;
+};
+
+#define HISTORY_MEM_BEGIN (FLASH_END_ADDR + 1) - DATA_OFFSET * FLASH_PAGE_SIZE
+#define PAGE_RECORDS_NUMBER FLASH_PAGE_SIZE / sizeof(struct measure_record)
+#define RECORD_WORDS_COUNT sizeof(struct measure_record)/sizeof(uint32_t)
+#define MAPPING_WORDS_COUNT sizeof(struct mem_history_mapping) / sizeof(uint32_t)
 
 // Structure should be 32 byte divisible 
 struct measure_config {
@@ -68,13 +78,10 @@ struct measure_config {
 void perform_calculation (struct measure_record *result);
 char *stringify_single_record(struct measure_record *record, size_t *length);
 size_t record_to_csv (char *buffer, struct measure_record *record);
-char *import_csv_history (uint16_t *offset, size_t *length);
+char *import_csv_history (size_t *length);
 char *get_oversampling(size_t *length);
 char *set_oversampling (size_t *length);
-
-#define RECORDS_INTERVAL_M 5
-
-#define RECORDS_COUNT (60 / RECORDS_INTERVAL_M) * 24 * 7
+char *get_mappings(size_t *length);
 
 #define RECORD_STRING_SIZE 65
 
